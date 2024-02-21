@@ -1,0 +1,34 @@
+[package]
+name = "simple_synth"
+version = "0.1.0"
+edition = "2021"
+authors = ["Tobias112358 <tobias.loveridge@gmail.com>"]
+license = "GPL-3.0-or-later"
+homepage = "https://youtu.be/dQw4w9WgXcQ"
+description = "Simple synthesizer project to learn how to make nih-plug VSTs."
+
+[workspace]
+members = ["xtask"]
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[dependencies]
+# Remove the `assert_process_allocs` feature to allow allocations on the audio
+# thread in debug builds.
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", features = ["assert_process_allocs", "standalone"] }
+nih_plug_vizia = { git = "https://github.com/robbert-vdh/nih-plug.git" }
+vizia = { git = "https://github.com/robbert-vdh/vizia.git", tag = "patched-2023-12-30", default_features = false, features = ["baseview", "clipboard", "x11"] }
+rand = "0.8.5"
+rand_pcg = "0.3.1"
+atomic_float = "0.1"
+
+
+[profile.release]
+lto = "thin"
+strip = "symbols"
+
+[profile.profiling]
+inherits = "release"
+debug = true
+strip = "none"

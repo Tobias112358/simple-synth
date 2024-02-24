@@ -1,7 +1,10 @@
 use nih_plug::prelude::*;
+use nih_plug_vizia::ViziaState;
 use rand::Rng;
 use rand_pcg::Pcg32;
 use std::sync::Arc;
+
+mod editor;
 
 /// The number of simultaneous voices for this synth.
 const NUM_VOICES: u32 = 16;
@@ -43,6 +46,11 @@ struct PolyModSynthParams {
     /// LFO test
     #[id = "lfo"]
     lfo_rate: FloatParam,
+
+    //Adding Vizia GUI.
+    #[persist = "editor-state"]
+    editor_state: Arc<ViziaState>,
+
 }
 
 /// Data for a single synth voice. In a real synth where performance matter, you may want to use a
@@ -114,6 +122,7 @@ impl Default for PolyModSynthParams {
             .with_unit(" dB")
             .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
             .with_string_to_value(formatters::s2v_f32_gain_to_db()),
+            editor_state: editor::default_state(),
             amp_attack_ms: FloatParam::new(
                 "Attack",
                 200.0,
@@ -185,6 +194,14 @@ impl Plugin for PolyModSynth {
 
         self.voices.fill(None);
         self.next_internal_voice_id = 0;
+    }
+
+
+    fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
+        editor::create(
+            self.params.clone(),
+            self.params.editor_state.clone(),
+        )
     }
 
     fn process(

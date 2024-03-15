@@ -236,6 +236,7 @@ impl Plugin for PolyModSynth {
                     Some(event) if (event.timing() as usize) <= block_start => {
                         // This synth doesn't support any of the polyphonic expression events. A
                         // real synth plugin however will want to support those.
+                        dbg!(event);
                         match event {
                             NoteEvent::NoteOn {
                                 timing,

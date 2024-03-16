@@ -3,6 +3,7 @@ use nih_plug_vizia::ViziaState;
 use rand::Rng;
 use rand_pcg::Pcg32;
 use std::sync::Arc;
+use std::f32::consts;
 
 mod editor;
 
@@ -30,6 +31,10 @@ pub struct PolyModSynth {
     /// The next internal voice ID, used only to figure out the oldest voice for voice stealing.
     /// This is incremented by one each time a voice is created.
     next_internal_voice_id: u64,
+
+    lfo_phase: f32,
+
+    lfo_rate: Smoother<f32>,
 }
 
 #[derive(Params)]
@@ -98,6 +103,8 @@ impl Default for PolyModSynth {
             // `[None; N]` requires the `Some(T)` to be `Copy`able
             voices: [0; NUM_VOICES as usize].map(|_| None),
             next_internal_voice_id: 0,
+            lfo_phase: 0.0,
+            lfo_rate: Smoother::new(SmoothingStyle::Linear(0.0)),
         }
     }
 }
@@ -216,6 +223,7 @@ impl Plugin for PolyModSynth {
         // split on note events, it's easier to work with raw audio here and to do the splitting by
         // hand.
         let num_samples = buffer.samples();
+        //dbg!(num_samples);
         let sample_rate = context.transport().sample_rate;
         let output = buffer.as_slice();
 
@@ -236,7 +244,7 @@ impl Plugin for PolyModSynth {
                     Some(event) if (event.timing() as usize) <= block_start => {
                         // This synth doesn't support any of the polyphonic expression events. A
                         // real synth plugin however will want to support those.
-                        dbg!(event);
+                        //dbg!(event);
                         match event {
                             NoteEvent::NoteOn {
                                 timing,
@@ -387,13 +395,14 @@ impl Plugin for PolyModSynth {
             // We'll start with silence, and then add the output from the active voices
             output[0][block_start..block_end].fill(0.0);
             output[1][block_start..block_end].fill(0.0);
-
+            //dbg!(block_start);
             // These are the smoothed global parameter values. These are used for voices that do not
             // have polyphonic modulation applied to them. With a plugin as simple as this it would
             // be possible to avoid this completely by simply always copying the smoother into the
             // voice's struct, but that may not be realistic when the plugin has hundreds of
             // parameters. The `voice_*` arrays are scratch arrays that an individual voice can use.
             let block_len = block_end - block_start;
+            //dbg!(block_len);
             let mut gain = [0.0; MAX_BLOCK_SIZE];
             let mut voice_gain = [0.0; MAX_BLOCK_SIZE];
             let mut voice_amp_envelope = [0.0; MAX_BLOCK_SIZE];
@@ -433,6 +442,12 @@ impl Plugin for PolyModSynth {
                     output[0][sample_idx] += sample;
                     output[1][sample_idx] += sample;
                 }
+            }
+
+            for (_, sample_idx) in (block_start..block_end).enumerate() {
+
+                output[0][sample_idx] *= self.calculate_sine(0.001);
+                output[1][sample_idx] *= self.calculate_sine(0.001);
             }
             
 
@@ -610,6 +625,20 @@ impl PolyModSynth {
                 _ => (),
             }
         }
+    }
+
+
+    //Calculate the sine for the lfo
+    fn calculate_sine(&mut self, frequency: f32) -> f32 {
+        let phase_delta = frequency / 1.0;
+        let sine = (self.lfo_phase * consts::TAU).sin();
+
+        self.lfo_phase += phase_delta;
+        if self.lfo_phase >= 1.0 {
+            self.lfo_phase -= 1.0;
+        }
+
+        sine
     }
 }
 

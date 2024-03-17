@@ -46,19 +46,45 @@ pub(crate) fn create(
 
             Label::new(cx, "Gain")
             .color(RGBA::rgb(225,0,0));
+
             ParamSlider::new(cx, Data::params, |params| &params.gain)
             .color(RGBA::rgb(225,0,0));
 
-            Label::new(cx, "LFO")
-            .color(RGBA::rgb(0,0,225));
-            ParamSlider::new(cx, Data::params, |params| &params.lfo_rate)
-            .color(RGBA::rgb(0,0,225));
+            VStack::new(cx, |cx| {
+                Label::new(cx, "LFO")
+                .color(RGBA::rgb(0,0,225))
+                .child_top(Pixels(10.0));
+    
+                ParamSlider::new(cx, Data::params, |params| &params.lfo_rate)
+                .color(RGBA::rgb(0,0,225));
+    
+                ParamSlider::new(cx, Data::params, |params| &params.lfo_wave)
+                .color(RGBA::rgb(0,0,225));
+    
+                HStack::new(cx, move |cx| {
+                    Label::new(cx, "Amount")
+                    .color(RGBA::rgb(0,0,225))
+                    .width(Pixels(100.0))
+                    .child_left(Stretch(0.0))
+                    .child_right(Stretch(1.0));
+    
+                    ParamSlider::new(cx, Data::params, |params| &params.lfo_gain)
+                    .color(RGBA::rgb(0,0,225))
+                    .width(Pixels(100.0));
+                    //.child_left(Stretch(1.0))
+                    //.child_right(Stretch(0.0));
+                })
+                .left(Units::Percentage(10.0));
+            })
+            .child_left(Stretch(1.0))
+            .child_right(Stretch(1.0))
+            .left(Units::Percentage(10.0))
+            .width(Units::Percentage(80.0))
+            .background_color(RGBA::rgb(225,225,180));
 
-            ParamSlider::new(cx, Data::params, |params| &params.lfo_wave)
-            .color(RGBA::rgb(0,0,225));
+            
 
-            ParamSlider::new(cx, Data::params, |params| &params.lfo_gain)
-            .color(RGBA::rgb(0,0,225));
+            
 
         })
         .row_between(Pixels(0.0))

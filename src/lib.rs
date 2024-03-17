@@ -176,7 +176,7 @@ impl Default for PolyModSynthParams {
                 FloatRange::Skewed { 
                     min: 0.1, 
                     max: 20.0, 
-                    factor: FloatRange::skew_factor(-2.0) }
+                    factor: FloatRange::skew_factor(-1.0) }
             )
             .with_smoother(SmoothingStyle::Linear(10.0))
             .with_value_to_string(formatters::v2s_f32_hz_then_khz(0))
@@ -188,10 +188,10 @@ impl Default for PolyModSynthParams {
             lfo_gain: FloatParam::new(
                 "LFO Gain",
                 1.0,
-                FloatRange::Skewed { 
-                    min: 1.0, 
-                    max: 24.0, 
-                    factor: FloatRange::skew_factor(-1.0) }
+                FloatRange::Linear { 
+                    min: 0.0, 
+                    max: 1.0, 
+                }
             ),
         }
     }
@@ -514,7 +514,10 @@ impl Plugin for PolyModSynth {
                 }
                 //dbg!(lfo_sine_value);
 
-                let lfo_sine_value_with_gain = (lfo_sine_value / self.params.lfo_gain.value()) + 1.0 - (1.0/self.params.lfo_gain.value());
+                //let lfo_sine_value_with_gain = (lfo_sine_value / self.params.lfo_gain.value()) + 1.0 - (1.0/self.params.lfo_gain.value());
+                let lfo_sine_value_with_gain = 
+                (self.params.lfo_gain.value() * lfo_sine_value) 
+                + 1.0 - self.params.lfo_gain.value();
 
                 //dbg!(lfo_sine_value_with_gain);
 

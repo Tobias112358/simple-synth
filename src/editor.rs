@@ -49,6 +49,8 @@ pub(crate) fn create(
             Label::new(cx, "LFO");
             ParamSlider::new(cx, Data::params, |params| &params.lfo_rate);
 
+            ParamSlider::new(cx, Data::params, |params| &params.lfo_wave);
+
         })
         .row_between(Pixels(0.0))
         .child_left(Stretch(1.0))

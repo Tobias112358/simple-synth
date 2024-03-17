@@ -18,6 +18,15 @@ const MAX_BLOCK_SIZE: usize = 64;
 // correct parameter.
 const GAIN_POLY_MOD_ID: u32 = 0;
 
+#[derive(PartialEq)]
+#[derive(Enum)]
+pub enum WaveType {
+    Sine,
+    Triangle,
+    Square,
+    Sawtooth,
+}
+
 /// A simple polyphonic synthesizer with support for CLAP's polyphonic modulation. See
 /// `NoteEvent::PolyModulation` for another source of information on how to use this.
 pub struct PolyModSynth {
@@ -34,7 +43,6 @@ pub struct PolyModSynth {
 
     lfo_phase: f32,
 
-    lfo_rate: Smoother<f32>,
 }
 
 #[derive(Params)]
@@ -49,8 +57,11 @@ struct PolyModSynthParams {
     #[id = "amp_rel"]
     amp_release_ms: FloatParam,
     /// LFO test
-    #[id = "lfo"]
+    #[id = "lfo_rate"]
     lfo_rate: FloatParam,
+
+    #[id = "lfo_wave"]
+    lfo_wave: EnumParam<WaveType>,
 
     //Adding Vizia GUI.
     #[persist = "editor-state"]
@@ -104,7 +115,6 @@ impl Default for PolyModSynth {
             voices: [0; NUM_VOICES as usize].map(|_| None),
             next_internal_voice_id: 0,
             lfo_phase: 0.0,
-            lfo_rate: Smoother::new(SmoothingStyle::Linear(0.0)),
         }
     }
 }
@@ -162,6 +172,10 @@ impl Default for PolyModSynthParams {
                     min: 0.1, 
                     max: 480.0, 
                     factor: FloatRange::skew_factor(-1.0) }
+            ),
+            lfo_wave: EnumParam::new(
+                "LFO Wave",
+                WaveType::Sine,
             )
         }
     }
@@ -455,10 +469,31 @@ impl Plugin for PolyModSynth {
                 }
             }
 
+            
             //For some reason the LFO works by calculating the sine each block, rather than on each sample.
             //I should look into what the implications of this are, but for now this works quite well :)
-            let lfo_sine_value = self.calculate_sine(self.params.lfo_rate.value());
-            //dbg!(lfo_sine_value);
+            let lfo_sine_value;
+
+            match self.params.lfo_wave.value() {
+                WaveType::Sine => {
+                    //dbg!("Sine");
+                    lfo_sine_value = self.calculate_sine(self.params.lfo_rate.value());
+                    
+                }
+                WaveType::Square => {
+                    //dbg!("Square");
+                    lfo_sine_value = self.calculate_square(self.params.lfo_rate.value());
+                }
+                WaveType::Triangle => {
+                    //dbg!("Triangle");
+                    lfo_sine_value = self.calculate_triangle(self.params.lfo_rate.value());
+                }
+                WaveType::Sawtooth => {
+                    //dbg!("Sawtooth");
+                    lfo_sine_value = self.calculate_sawtooth(self.params.lfo_rate.value());
+                }
+            }
+            dbg!(lfo_sine_value);
 
             for (_, sample_idx) in (block_start..block_end).enumerate() {
                 
@@ -654,7 +689,63 @@ impl PolyModSynth {
             self.lfo_phase -= 1.0;
         }
 
-        sine
+        // sine is a value between -1.0 and 1.0. 
+        //If we just use this value it will end up twice as fast, and flip the polarization of the origtinal sound.
+        //We want to keep the polarization of the original sound, so we need to convert it to a value between 0.0 and 1.0
+        (sine + 1.0) / 2.0
+    }
+
+    //Calculate the square wave for the lfo
+    fn calculate_square(&mut self, frequency: f32) -> f32 {
+        let phase_delta = frequency / 48000.0;
+        let sine = (self.lfo_phase * consts::TAU).sin();
+
+        let square = if sine > 0.0 { 1.0 } else { 0.0 };
+
+        self.lfo_phase += phase_delta;
+        if self.lfo_phase >= 1.0 {
+            self.lfo_phase -= 1.0;
+        }
+
+        square
+    }
+
+    //Calculate the square wave for the lfo
+    fn calculate_triangle(&mut self, frequency: f32) -> f32 {
+        let phase_delta = frequency / 48000.0;
+        //let sine = (self.lfo_phase * consts::TAU).sin();
+
+        let triangle = if self.lfo_phase > 0.5 {
+            (self.lfo_phase * 2.0) - 1.0
+        } else {
+            (2.0 - (self.lfo_phase * 2.0)) - 1.0
+        };
+
+        self.lfo_phase += phase_delta;
+        if self.lfo_phase >= 1.0 {
+            self.lfo_phase -= 1.0;
+        }
+
+        triangle
+    }
+
+    //Calculate the square wave for the lfo
+    fn calculate_sawtooth(&mut self, frequency: f32) -> f32 {
+        let phase_delta = frequency / 48000.0;
+        //let sine = (self.lfo_phase * consts::TAU).sin();
+
+        let sawtooth = ((self.lfo_phase * 2.0 + 1.0)/2.0) - 0.5;
+
+
+
+        //let sawtooth = if sine > 0.0 { 1.0 } else { 0.0 };
+
+        self.lfo_phase += phase_delta;
+        if self.lfo_phase >= 1.0 {
+            self.lfo_phase -= 1.0;
+        }
+
+        sawtooth
     }
 }
 

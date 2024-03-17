@@ -3,6 +3,7 @@ use nih_plug::prelude::Editor;
 use nih_plug_vizia::vizia::prelude::*;
 use nih_plug_vizia::widgets::*;
 use nih_plug_vizia::{assets, create_vizia_editor, ViziaState, ViziaTheming};
+
 //use std::sync::atomic::Ordering;
 use std::sync::Arc;
 //use std::time::Duration;
@@ -43,13 +44,21 @@ pub(crate) fn create(
                 .child_top(Stretch(1.0))
                 .child_bottom(Pixels(0.0));
 
-            Label::new(cx, "Gain");
-            ParamSlider::new(cx, Data::params, |params| &params.gain);
+            Label::new(cx, "Gain")
+            .color(RGBA::rgb(225,0,0));
+            ParamSlider::new(cx, Data::params, |params| &params.gain)
+            .color(RGBA::rgb(225,0,0));
 
-            Label::new(cx, "LFO");
-            ParamSlider::new(cx, Data::params, |params| &params.lfo_rate);
+            Label::new(cx, "LFO")
+            .color(RGBA::rgb(0,0,225));
+            ParamSlider::new(cx, Data::params, |params| &params.lfo_rate)
+            .color(RGBA::rgb(0,0,225));
 
-            ParamSlider::new(cx, Data::params, |params| &params.lfo_wave);
+            ParamSlider::new(cx, Data::params, |params| &params.lfo_wave)
+            .color(RGBA::rgb(0,0,225));
+
+            ParamSlider::new(cx, Data::params, |params| &params.lfo_gain)
+            .color(RGBA::rgb(0,0,225));
 
         })
         .row_between(Pixels(0.0))

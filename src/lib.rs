@@ -42,6 +42,7 @@ pub struct PolyModSynth {
     next_internal_voice_id: u64,
 
     lfo_phase: f32,
+    sample_rate: f32,
 
 }
 
@@ -62,6 +63,9 @@ struct PolyModSynthParams {
 
     #[id = "lfo_wave"]
     lfo_wave: EnumParam<WaveType>,
+    
+    #[id = "lfo_gain"]
+    lfo_gain: FloatParam,
 
     //Adding Vizia GUI.
     #[persist = "editor-state"]
@@ -115,6 +119,7 @@ impl Default for PolyModSynth {
             voices: [0; NUM_VOICES as usize].map(|_| None),
             next_internal_voice_id: 0,
             lfo_phase: 0.0,
+            sample_rate: 1.0,
         }
     }
 }
@@ -166,17 +171,28 @@ impl Default for PolyModSynthParams {
             .with_step_size(0.1)
             .with_unit(" ms"),
             lfo_rate: FloatParam::new(
-                "LFO",
-                60.0,
+                "LFO Rate",
+                5.0,
                 FloatRange::Skewed { 
                     min: 0.1, 
-                    max: 480.0, 
-                    factor: FloatRange::skew_factor(-1.0) }
-            ),
+                    max: 20.0, 
+                    factor: FloatRange::skew_factor(-2.0) }
+            )
+            .with_smoother(SmoothingStyle::Linear(10.0))
+            .with_value_to_string(formatters::v2s_f32_hz_then_khz(0))
+            .with_string_to_value(formatters::s2v_f32_hz_then_khz()),
             lfo_wave: EnumParam::new(
                 "LFO Wave",
                 WaveType::Sine,
-            )
+            ),
+            lfo_gain: FloatParam::new(
+                "LFO Gain",
+                1.0,
+                FloatRange::Skewed { 
+                    min: 1.0, 
+                    max: 24.0, 
+                    factor: FloatRange::skew_factor(-1.0) }
+            ),
         }
     }
 }
@@ -212,6 +228,7 @@ impl Plugin for PolyModSynth {
         buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
+        self.sample_rate = buffer_config.sample_rate;
         dbg!(buffer_config.sample_rate);
 
         true
@@ -469,36 +486,40 @@ impl Plugin for PolyModSynth {
                 }
             }
 
-            
-            //For some reason the LFO works by calculating the sine each block, rather than on each sample.
-            //I should look into what the implications of this are, but for now this works quite well :)
-            let lfo_sine_value;
-
-            match self.params.lfo_wave.value() {
-                WaveType::Sine => {
-                    //dbg!("Sine");
-                    lfo_sine_value = self.calculate_sine(self.params.lfo_rate.value());
-                    
-                }
-                WaveType::Square => {
-                    //dbg!("Square");
-                    lfo_sine_value = self.calculate_square(self.params.lfo_rate.value());
-                }
-                WaveType::Triangle => {
-                    //dbg!("Triangle");
-                    lfo_sine_value = self.calculate_triangle(self.params.lfo_rate.value());
-                }
-                WaveType::Sawtooth => {
-                    //dbg!("Sawtooth");
-                    lfo_sine_value = self.calculate_sawtooth(self.params.lfo_rate.value());
-                }
-            }
-            dbg!(lfo_sine_value);
 
             for (_, sample_idx) in (block_start..block_end).enumerate() {
-                
-                output[0][sample_idx] *= lfo_sine_value;
-                output[1][sample_idx] *= lfo_sine_value;
+                                
+                //For some reason the LFO works by calculating the sine each block, rather than on each sample.
+                //I should look into what the implications of this are, but for now this works quite well :)
+                //Update: I found out that it means the frequency/sample rate formula won't give us the right info unless we make the lfo on each sample! This is fixed by moving it in here.
+                let lfo_sine_value;
+
+                match self.params.lfo_wave.value() {
+                    WaveType::Sine => {
+                        //dbg!("Sine");
+                        lfo_sine_value = self.calculate_sine(self.params.lfo_rate.value());
+                    }
+                    WaveType::Square => {
+                        //dbg!("Square");
+                        lfo_sine_value = self.calculate_square(self.params.lfo_rate.value());
+                    }
+                    WaveType::Triangle => {
+                        //dbg!("Triangle");
+                        lfo_sine_value = self.calculate_triangle(self.params.lfo_rate.value());
+                    }
+                    WaveType::Sawtooth => {
+                        //dbg!("Sawtooth");
+                        lfo_sine_value = self.calculate_sawtooth(self.params.lfo_rate.value());
+                    }
+                }
+                //dbg!(lfo_sine_value);
+
+                let lfo_sine_value_with_gain = (lfo_sine_value / self.params.lfo_gain.value()) + 1.0 - (1.0/self.params.lfo_gain.value());
+
+                //dbg!(lfo_sine_value_with_gain);
+
+                output[0][sample_idx] *= lfo_sine_value_with_gain;
+                output[1][sample_idx] *= lfo_sine_value_with_gain;
             }
             
 
@@ -681,8 +702,9 @@ impl PolyModSynth {
 
     //Calculate the sine for the lfo
     fn calculate_sine(&mut self, frequency: f32) -> f32 {
-        let phase_delta = frequency / 48000.0;
-        let sine = (self.lfo_phase * consts::TAU).sin();
+        let phase_delta = frequency / self.sample_rate;
+        //dbg!(frequency);
+        let sine = (self.lfo_phase * consts::TAU).cos();
 
         self.lfo_phase += phase_delta;
         if self.lfo_phase >= 1.0 {
@@ -697,8 +719,8 @@ impl PolyModSynth {
 
     //Calculate the square wave for the lfo
     fn calculate_square(&mut self, frequency: f32) -> f32 {
-        let phase_delta = frequency / 48000.0;
-        let sine = (self.lfo_phase * consts::TAU).sin();
+        let phase_delta = frequency / self.sample_rate;
+        let sine = (self.lfo_phase * consts::TAU).cos();
 
         let square = if sine > 0.0 { 1.0 } else { 0.0 };
 
@@ -712,7 +734,7 @@ impl PolyModSynth {
 
     //Calculate the square wave for the lfo
     fn calculate_triangle(&mut self, frequency: f32) -> f32 {
-        let phase_delta = frequency / 48000.0;
+        let phase_delta = frequency / self.sample_rate;
         //let sine = (self.lfo_phase * consts::TAU).sin();
 
         let triangle = if self.lfo_phase > 0.5 {
@@ -731,7 +753,7 @@ impl PolyModSynth {
 
     //Calculate the square wave for the lfo
     fn calculate_sawtooth(&mut self, frequency: f32) -> f32 {
-        let phase_delta = frequency / 48000.0;
+        let phase_delta = frequency / self.sample_rate;
         //let sine = (self.lfo_phase * consts::TAU).sin();
 
         let sawtooth = ((self.lfo_phase * 2.0 + 1.0)/2.0) - 0.5;

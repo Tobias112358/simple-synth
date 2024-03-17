@@ -46,6 +46,9 @@ pub(crate) fn create(
             Label::new(cx, "Gain");
             ParamSlider::new(cx, Data::params, |params| &params.gain);
 
+            Label::new(cx, "LFO");
+            ParamSlider::new(cx, Data::params, |params| &params.lfo_rate);
+
         })
         .row_between(Pixels(0.0))
         .child_left(Stretch(1.0))

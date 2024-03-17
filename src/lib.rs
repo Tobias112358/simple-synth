@@ -192,6 +192,17 @@ impl Plugin for PolyModSynth {
         self.params.clone()
     }
 
+    fn initialize(
+        &mut self,
+        _audio_io_layout: &AudioIOLayout,
+        buffer_config: &BufferConfig,
+        _context: &mut impl InitContext<Self>,
+    ) -> bool {
+        dbg!(buffer_config.sample_rate);
+
+        true
+    }
+
     // If the synth as a variable number of voices, you will need to call
     // `context.set_current_voice_capacity()` in `initialize()` and in `process()` (when the
     // capacity changes) to inform the host about this.
@@ -444,10 +455,15 @@ impl Plugin for PolyModSynth {
                 }
             }
 
-            for (_, sample_idx) in (block_start..block_end).enumerate() {
+            //For some reason the LFO works by calculating the sine each block, rather than on each sample.
+            //I should look into what the implications of this are, but for now this works quite well :)
+            let lfo_sine_value = self.calculate_sine(self.params.lfo_rate.value());
+            //dbg!(lfo_sine_value);
 
-                output[0][sample_idx] *= self.calculate_sine(0.001);
-                output[1][sample_idx] *= self.calculate_sine(0.001);
+            for (_, sample_idx) in (block_start..block_end).enumerate() {
+                
+                output[0][sample_idx] *= lfo_sine_value;
+                output[1][sample_idx] *= lfo_sine_value;
             }
             
 
@@ -630,7 +646,7 @@ impl PolyModSynth {
 
     //Calculate the sine for the lfo
     fn calculate_sine(&mut self, frequency: f32) -> f32 {
-        let phase_delta = frequency / 1.0;
+        let phase_delta = frequency / 48000.0;
         let sine = (self.lfo_phase * consts::TAU).sin();
 
         self.lfo_phase += phase_delta;

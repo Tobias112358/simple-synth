@@ -48,6 +48,8 @@ pub struct PolyModSynth {
 
 #[derive(Params)]
 struct PolyModSynthParams {
+
+
     /// A voice's gain. This can be polyphonically modulated.
     #[id = "gain"]
     gain: FloatParam,
@@ -57,13 +59,21 @@ struct PolyModSynthParams {
     /// The amplitude envelope release time. This is the same for every voice.
     #[id = "amp_rel"]
     amp_release_ms: FloatParam,
-    /// LFO test
+
+    #[id = "waveform"]
+    waveform: EnumParam<WaveType>,
+
+    //LFO Parameters
+
+    /// The Frequency that the LFO can move between.
     #[id = "lfo_rate"]
     lfo_rate: FloatParam,
 
+    /// The wave selected for the LFO.
     #[id = "lfo_wave"]
     lfo_wave: EnumParam<WaveType>,
     
+    // The amount the LFO affects the signal.
     #[id = "lfo_gain"]
     lfo_gain: FloatParam,
 
@@ -170,6 +180,13 @@ impl Default for PolyModSynthParams {
             )
             .with_step_size(0.1)
             .with_unit(" ms"),
+            waveform: EnumParam::new(
+                "Waveform",
+                WaveType::Sine,
+            ),
+            //LFO Parameters
+
+
             lfo_rate: FloatParam::new(
                 "LFO Rate",
                 5.0,
@@ -472,18 +489,71 @@ impl Plugin for PolyModSynth {
                     .amp_envelope
                     .next_block(&mut voice_amp_envelope, block_len);
 
-                for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
-                    let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
-                    let sample = (voice.phase * 2.0 - 1.0) * amp;
-
-                    voice.phase += voice.phase_delta;
-                    if voice.phase >= 1.0 {
-                        voice.phase -= 1.0;
+                match self.params.waveform.value() {
+                    WaveType::Sine => {
+                        for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
+                            let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
+                            let sample = (voice.phase * consts::TAU).sin() * amp;
+        
+                            voice.phase += voice.phase_delta;
+                            if voice.phase >= 1.0 {
+                                voice.phase -= 1.0;
+                            }
+        
+                            output[0][sample_idx] += sample;
+                            output[1][sample_idx] += sample;
+                        }
                     }
-
-                    output[0][sample_idx] += sample;
-                    output[1][sample_idx] += sample;
+                    WaveType::Square => {
+                        //Currently more like a t
+                        for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
+                            let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
+                            let sample = if voice.phase_delta > 0.5 { 1.0 * amp } else { -1.0 * amp };
+        
+                            voice.phase += voice.phase_delta;
+                            if voice.phase >= 1.0 {
+                                voice.phase -= 1.0;
+                            }
+        
+                            output[0][sample_idx] += sample;
+                            output[1][sample_idx] += sample;
+                        }
+                    }
+                    WaveType::Triangle => {
+                        //Currently more like a sheared square wave
+                        for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
+                            let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
+                            let sample = if voice.phase > 0.5 {
+                                ((2.0*(voice.phase * 2.0)) - 1.0) * amp
+                            } else {
+                                ((2.0 - (2.0*(voice.phase * 2.0))) - 1.0) * amp
+                            };
+        
+                            voice.phase += voice.phase_delta;
+                            if voice.phase >= 1.0 {
+                                voice.phase -= 1.0;
+                            }
+        
+                            output[0][sample_idx] += sample;
+                            output[1][sample_idx] += sample;
+                        }
+                    }
+                    WaveType::Sawtooth => {
+                        for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
+                            let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
+                            let sample = (voice.phase * 2.0 - 1.0) * amp;
+        
+                            voice.phase += voice.phase_delta;
+                            if voice.phase >= 1.0 {
+                                voice.phase -= 1.0;
+                            }
+        
+                            output[0][sample_idx] += sample;
+                            output[1][sample_idx] += sample;
+                        }
+                    }
                 }
+                
             }
 
 

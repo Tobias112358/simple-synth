@@ -23,7 +23,7 @@ impl Model for Data {}
 
 // Makes sense to also define this here, makes it a bit easier to keep track of
 pub(crate) fn default_state() -> Arc<ViziaState> {
-    ViziaState::new(|| (300, 300))
+    ViziaState::new(|| (350, 350))
 }
 
 pub(crate) fn create(
@@ -72,6 +72,13 @@ pub(crate) fn create(
             .border_color(RGBA::rgb(123,133,230))
             .font_family(vec![FamilyOwned::Name(String::from(my_assets::RED_ROSE))])
             .font_weight(FontWeightKeyword::Light);
+
+            ParamSlider::new(cx, Data::params, |params| &params.waveform)
+            .color(RGBA::rgb(225,0,0))
+            .border_color(RGBA::rgb(123,133,230))
+            .font_family(vec![FamilyOwned::Name(String::from(my_assets::RED_ROSE))])
+            .font_weight(FontWeightKeyword::Light)
+            .child_bottom(Pixels(10.0));
 
             VStack::new(cx, |cx| {
                 Label::new(cx, "LFO")
@@ -130,7 +137,7 @@ pub(crate) fn create(
         .row_between(Pixels(0.0))
         .child_left(Stretch(1.0))
         .child_right(Stretch(1.0))
-        .height(Pixels(300.0))
+        .height(Pixels(350.0))
         .background_color(RGBA::rgb(0,0,0));
 
         ResizeHandle::new(cx);

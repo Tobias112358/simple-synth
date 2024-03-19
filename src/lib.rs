@@ -41,8 +41,10 @@ pub struct PolyModSynth {
     /// This is incremented by one each time a voice is created.
     next_internal_voice_id: u64,
 
+    any_voices_on: bool,
     lfo_phase: f32,
     sample_rate: f32,
+
 
 }
 
@@ -76,6 +78,10 @@ struct PolyModSynthParams {
     // The amount the LFO affects the signal.
     #[id = "lfo_gain"]
     lfo_gain: FloatParam,
+    
+    // fixes the LFO phase to the host when enabled.
+    #[id = "lfo_sync"]
+    lfo_sync: BoolParam,
 
     //Adding Vizia GUI.
     #[persist = "editor-state"]
@@ -128,6 +134,7 @@ impl Default for PolyModSynth {
             // `[None; N]` requires the `Some(T)` to be `Copy`able
             voices: [0; NUM_VOICES as usize].map(|_| None),
             next_internal_voice_id: 0,
+            any_voices_on: false,
             lfo_phase: 0.0,
             sample_rate: 1.0,
         }
@@ -209,6 +216,10 @@ impl Default for PolyModSynthParams {
                     min: 0.0, 
                     max: 1.0, 
                 }
+            ),
+            lfo_sync: BoolParam::new(
+                "LFO Sync",
+                false,
             ),
         }
     }
@@ -326,6 +337,11 @@ impl Plugin for PolyModSynth {
                                 voice.phase = initial_phase;
                                 voice.phase_delta = util::midi_note_to_freq(note) / sample_rate;
                                 voice.amp_envelope = amp_envelope;
+
+                                self.any_voices_on = true;
+
+                                                
+                                dbg!(self.lfo_phase);
                             }
                             NoteEvent::NoteOff {
                                 timing: _,
@@ -565,26 +581,28 @@ impl Plugin for PolyModSynth {
                 //For some reason the LFO works by calculating the sine each block, rather than on each sample.
                 //I should look into what the implications of this are, but for now this works quite well :)
                 //Update: I found out that it means the frequency/sample rate formula won't give us the right info unless we make the lfo on each sample! This is fixed by moving it in here.
-                let lfo_sine_value;
-
-                match self.params.lfo_wave.value() {
-                    WaveType::Sine => {
-                        //dbg!("Sine");
-                        lfo_sine_value = self.calculate_sine(self.params.lfo_rate.value());
+                let lfo_sine_value = if self.any_voices_on {
+                    match self.params.lfo_wave.value() {
+                        WaveType::Sine => {
+                            //dbg!("Sine");
+                            self.calculate_sine(self.params.lfo_rate.value())
+                        }
+                        WaveType::Square => {
+                            //dbg!("Square");
+                            self.calculate_square(self.params.lfo_rate.value())
+                        }
+                        WaveType::Triangle => {
+                            //dbg!("Triangle");
+                            self.calculate_triangle(self.params.lfo_rate.value())
+                        }
+                        WaveType::Sawtooth => {
+                            //dbg!("Sawtooth");
+                            self.calculate_sawtooth(self.params.lfo_rate.value())
+                        }
                     }
-                    WaveType::Square => {
-                        //dbg!("Square");
-                        lfo_sine_value = self.calculate_square(self.params.lfo_rate.value());
-                    }
-                    WaveType::Triangle => {
-                        //dbg!("Triangle");
-                        lfo_sine_value = self.calculate_triangle(self.params.lfo_rate.value());
-                    }
-                    WaveType::Sawtooth => {
-                        //dbg!("Sawtooth");
-                        lfo_sine_value = self.calculate_sawtooth(self.params.lfo_rate.value());
-                    }
-                }
+                } else {
+                    0.0
+                };
                 //dbg!(lfo_sine_value);
 
                 //let lfo_sine_value_with_gain = (lfo_sine_value / self.params.lfo_gain.value()) + 1.0 - (1.0/self.params.lfo_gain.value());
@@ -598,9 +616,11 @@ impl Plugin for PolyModSynth {
                 output[1][sample_idx] *= lfo_sine_value_with_gain;
             }
             
+            let mut all_voice_terminated_count = 0;
 
             // Terminate voices whose release period has fully ended. This could be done as part of
             // the previous loop but this is simpler.
+
             for voice in self.voices.iter_mut() {
                 match voice {
                     Some(v) if v.releasing && v.amp_envelope.previous_value() == 0.0 => {
@@ -613,9 +633,21 @@ impl Plugin for PolyModSynth {
                             note: v.note,
                         });
                         *voice = None;
+                        all_voice_terminated_count += 1;
+                    }
+                    Some(v) if !v.releasing && v.amp_envelope.previous_value() > 0.0 => {
+                        
+                        all_voice_terminated_count -= 1;
                     }
                     _ => (),
                 }
+            }
+            // If all voices have been terminated, then we can reset the lfo phase
+            if all_voice_terminated_count > 0 {
+                dbg!("Resetting lfo");
+                self.lfo_phase = 0.0;
+                dbg!(self.lfo_phase);
+                self.any_voices_on = false;
             }
 
             // And then just keep processing blocks until we've run out of buffer to fill

@@ -493,7 +493,7 @@ impl Plugin for PolyModSynth {
                     WaveType::Sine => {
                         for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
                             let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
-                            let sample = (voice.phase * consts::TAU).sin() * amp;
+                            let sample = (voice.phase * consts::TAU).cos() * amp;
         
                             voice.phase += voice.phase_delta;
                             if voice.phase >= 1.0 {
@@ -508,7 +508,7 @@ impl Plugin for PolyModSynth {
                         //Currently more like a t
                         for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
                             let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
-                            let sample = if voice.phase_delta > 0.5 { 1.0 * amp } else { -1.0 * amp };
+                            let sample = if voice.phase > 0.5 { 1.0 * amp } else { -1.0 * amp };
         
                             voice.phase += voice.phase_delta;
                             if voice.phase >= 1.0 {
@@ -524,9 +524,12 @@ impl Plugin for PolyModSynth {
                         for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
                             let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
                             let sample = if voice.phase > 0.5 {
-                                ((2.0*(voice.phase * 2.0)) - 1.0) * amp
+                                
+                                -((((4.0*voice.phase) % 2.0)).abs() -1.0) * amp
+                                //((2.0*(voice.phase * 2.0)) - 1.0) * amp
                             } else {
-                                ((2.0 - (2.0*(voice.phase * 2.0))) - 1.0) * amp
+                                ((((4.0*voice.phase) % 2.0)).abs() -1.0) * amp
+                                //((2.0 - (2.0*(voice.phase * 2.0))) + 1.0) * amp
                             };
         
                             voice.phase += voice.phase_delta;

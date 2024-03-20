@@ -338,10 +338,9 @@ impl Plugin for PolyModSynth {
                                 voice.phase_delta = util::midi_note_to_freq(note) / sample_rate;
                                 voice.amp_envelope = amp_envelope;
 
+                                //LFO component.
                                 self.any_voices_on = true;
 
-                                                
-                                dbg!(self.lfo_phase);
                             }
                             NoteEvent::NoteOff {
                                 timing: _,
@@ -506,9 +505,11 @@ impl Plugin for PolyModSynth {
                     .next_block(&mut voice_amp_envelope, block_len);
 
                 match self.params.waveform.value() {
+                    //Formula for Sine Wave.
                     WaveType::Sine => {
                         for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
                             let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
+                            
                             let sample = (voice.phase * consts::TAU).cos() * amp;
         
                             voice.phase += voice.phase_delta;
@@ -521,9 +522,10 @@ impl Plugin for PolyModSynth {
                         }
                     }
                     WaveType::Square => {
-                        //Currently more like a t
+                        //Formula for Square Wave.
                         for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
                             let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
+                            
                             let sample = if voice.phase > 0.5 { 1.0 * amp } else { -1.0 * amp };
         
                             voice.phase += voice.phase_delta;
@@ -536,16 +538,14 @@ impl Plugin for PolyModSynth {
                         }
                     }
                     WaveType::Triangle => {
-                        //Currently more like a sheared square wave
+                        //Formula for Triangle Wave.
                         for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
                             let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
+                            
                             let sample = if voice.phase > 0.5 {
-                                
                                 -((((4.0*voice.phase) % 2.0)).abs() -1.0) * amp
-                                //((2.0*(voice.phase * 2.0)) - 1.0) * amp
                             } else {
                                 ((((4.0*voice.phase) % 2.0)).abs() -1.0) * amp
-                                //((2.0 - (2.0*(voice.phase * 2.0))) + 1.0) * amp
                             };
         
                             voice.phase += voice.phase_delta;
@@ -558,8 +558,10 @@ impl Plugin for PolyModSynth {
                         }
                     }
                     WaveType::Sawtooth => {
+                        //Formula for Sawtooth Wave.
                         for (value_idx, sample_idx) in (block_start..block_end).enumerate() {
                             let amp = voice.velocity_sqrt * gain[value_idx] * voice_amp_envelope[value_idx];
+                            
                             let sample = (voice.phase * 2.0 - 1.0) * amp;
         
                             voice.phase += voice.phase_delta;
@@ -575,7 +577,9 @@ impl Plugin for PolyModSynth {
                 
             }
 
-
+            //Loop over the block and calculate the lfo.
+            //this could possibly happen earlier, but it makes sense to me
+            //to have the lfo applied at the end, like a master lfo.
             for (_, sample_idx) in (block_start..block_end).enumerate() {
                                 
                 //For some reason the LFO works by calculating the sine each block, rather than on each sample.
@@ -584,33 +588,25 @@ impl Plugin for PolyModSynth {
                 let lfo_sine_value = if self.any_voices_on {
                     match self.params.lfo_wave.value() {
                         WaveType::Sine => {
-                            //dbg!("Sine");
                             self.calculate_sine(self.params.lfo_rate.value())
                         }
                         WaveType::Square => {
-                            //dbg!("Square");
                             self.calculate_square(self.params.lfo_rate.value())
                         }
                         WaveType::Triangle => {
-                            //dbg!("Triangle");
                             self.calculate_triangle(self.params.lfo_rate.value())
                         }
                         WaveType::Sawtooth => {
-                            //dbg!("Sawtooth");
                             self.calculate_sawtooth(self.params.lfo_rate.value())
                         }
                     }
                 } else {
                     0.0
                 };
-                //dbg!(lfo_sine_value);
 
-                //let lfo_sine_value_with_gain = (lfo_sine_value / self.params.lfo_gain.value()) + 1.0 - (1.0/self.params.lfo_gain.value());
                 let lfo_sine_value_with_gain = 
                 (self.params.lfo_gain.value() * lfo_sine_value) 
                 + 1.0 - self.params.lfo_gain.value();
-
-                //dbg!(lfo_sine_value_with_gain);
 
                 output[0][sample_idx] *= lfo_sine_value_with_gain;
                 output[1][sample_idx] *= lfo_sine_value_with_gain;
@@ -644,9 +640,9 @@ impl Plugin for PolyModSynth {
             }
             // If all voices have been terminated, then we can reset the lfo phase
             if all_voice_terminated_count > 0 {
-                dbg!("Resetting lfo");
+                //dbg!("Resetting lfo");
                 self.lfo_phase = 0.0;
-                dbg!(self.lfo_phase);
+                //dbg!(self.lfo_phase);
                 self.any_voices_on = false;
             }
 
